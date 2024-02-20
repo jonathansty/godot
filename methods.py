@@ -1076,6 +1076,17 @@ def dump(env):
         dump(env.Dictionary(), f, indent=4, default=non_serializable)
 
 
+def create_filter_obj(path, project_dir="vs", is_custom_module=False):
+    vspath = os.path.abspath(project_dir.replace("/", "\\"))
+    wpath = os.path.abspath(str(path).replace("/", "\\"))
+
+    filter = ""
+    if is_custom_module:
+        filter += "Custom Modules\\"
+    filter += str(path).replace("/", "\\")
+    relpath = os.path.relpath(wpath, vspath)
+    return (filter, relpath)
+
 # Custom Visual Studio project generation logic that supports any platform that has a msvs.py
 # script, so Visual Studio can be used to run scons for any platform, with the right defines per target.
 # Invoked with scons vsproj=yes
@@ -1095,8 +1106,11 @@ def dump(env):
 #
 # To generate AND build from the command line:
 #   scons vsproj=yes vsproj_gen_only=yes
-def generate_vs_project(env, original_args, project_name="godot"):
+def generate_vs_project(env, original_args, project_name="godot", project_dir="vs"):
     # Augmented glob_recursive that also fills the dirs argument with traversed directories that have content.
+    if not os.path.exists(project_dir):
+        os.mkdir(project_dir)
+
     def glob_recursive_2(pattern, dirs, node="."):
         from SCons import Node
         from SCons.Script import Glob
@@ -1189,26 +1203,67 @@ def generate_vs_project(env, original_args, project_name="godot"):
         sys.path.remove(tmppath)
         sys.modules.pop("msvs")
 
+
+    # Generate the header filters and absolute paths
     headers = []
     headers_dirs = []
     for file in glob_recursive_2("*.h", headers_dirs):
-        headers.append(str(file).replace("/", "\\"))
+        headers.append(create_filter_obj(file, project_dir))
     for file in glob_recursive_2("*.hpp", headers_dirs):
-        headers.append(str(file).replace("/", "\\"))
+        headers.append(create_filter_obj(file, project_dir))
 
+    # Generate the sources filters and absolute paths
     sources = []
     sources_dirs = []
     for file in glob_recursive_2("*.cpp", sources_dirs):
-        sources.append(str(file).replace("/", "\\"))
+        sources.append(create_filter_obj(file, project_dir))
     for file in glob_recursive_2("*.c", sources_dirs):
-        sources.append(str(file).replace("/", "\\"))
+        sources.append(create_filter_obj(file, project_dir))
 
     others = []
     others_dirs = []
     for file in glob_recursive_2("*.natvis", others_dirs):
-        others.append(str(file).replace("/", "\\"))
+        others.append(create_filter_obj(file, project_dir))
     for file in glob_recursive_2("*.glsl", others_dirs):
-        others.append(str(file).replace("/", "\\"))
+        others.append(create_filter_obj(file, project_dir))
+
+    # Detect the module files and add these to the project
+    print("Detecting custom module files...")
+    paths = env["custom_modules"].split(",")
+    modules = OrderedDict()
+    for p in paths:
+        modules = detect_modules(p, True)
+
+    for module_name,module_path in modules.items():
+        rel_module_path = os.path.relpath(os.path.join(module_path, ".."), os.getcwd())
+        abs_module_path = os.path.abspath(module_path)
+        print(f"Detected module {module_name} and path {rel_module_path}")
+
+        # Glob all files and add it to the right directories
+        def glob_and_append(patterns, dirs, files):
+            custom_prefix = "modules"
+
+            for pattern in patterns.split(";"):
+                tmp_dirs = []
+                for f in glob_recursive_2(pattern, tmp_dirs, rel_module_path):
+                    file_p = os.path.relpath(f.path, project_dir)
+                    filter = os.path.join(custom_prefix,os.path.relpath(f.path, rel_module_path))
+                    filter_obj = (filter, file_p)
+                    files.append(filter_obj)
+                for dir in tmp_dirs:
+                    if dir.find(abs_module_path) >= 0:
+                        dir = os.path.relpath(dir, project_dir)
+                        filter = os.path.join(custom_prefix, os.path.relpath(dir, rel_module_path))
+                        d = ""
+                        for part in str(filter).split("\\"):
+                            d += part
+                            if not d in dirs:
+                                dirs.append(d)
+                            d += "\\"
+
+        glob_and_append("*.h;*.hpp", headers_dirs, headers)
+        glob_and_append("*.cpp;*.c", sources_dirs, sources)
+        glob_and_append("*.natvis;*.glsl", others_dirs, others)
 
     skip_filters = False
     import hashlib
@@ -1220,56 +1275,54 @@ def generate_vs_project(env, original_args, project_name="godot"):
         )
     ).hexdigest()
 
-    if os.path.exists(f"{project_name}.vcxproj.filters"):
-        existing_filters = open(f"{project_name}.vcxproj.filters", "r").read()
-        match = re.search(r"(?ms)^<!-- CHECKSUM$.([0-9a-f]{32})", existing_filters)
-        if match is not None and md5 == match.group(1):
-            skip_filters = True
+
+    # if os.path.exists(f"{os.path.join(project_dir,project_name)}.vcxproj.filters"):
+    #     existing_filters = open(f"{os.path.join(project_dir,project_name)}.vcxproj.filters", "r").read()
+    #     match = re.search(r"(?ms)^<!-- CHECKSUM$.([0-9a-f]{32})", existing_filters)
+    #     if match is not None and md5 == match.group(1):
+    #         skip_filters = True
 
     import uuid
 
     # Don't regenerate the filters file if nothing has changed, so we keep the existing UUIDs.
     if not skip_filters:
-        print(f"Regenerating {project_name}.vcxproj.filters")
+        print(f"Regenerating {project_dir}/{project_name}.vcxproj.filters")
 
         filters_template = open("misc/msvs/vcxproj.filters.template", "r").read()
         for i in range(1, 10):
             filters_template = filters_template.replace(f"%%UUID{i}%%", str(uuid.uuid4()))
 
         filters = ""
-
-        for d in headers_dirs:
-            filters += f'<Filter Include="Header Files\\{d}"><UniqueIdentifier>{{{str(uuid.uuid4())}}}</UniqueIdentifier></Filter>\n'
-        for d in sources_dirs:
-            filters += f'<Filter Include="Source Files\\{d}"><UniqueIdentifier>{{{str(uuid.uuid4())}}}</UniqueIdentifier></Filter>\n'
-        for d in others_dirs:
-            filters += f'<Filter Include="Other Files\\{d}"><UniqueIdentifier>{{{str(uuid.uuid4())}}}</UniqueIdentifier></Filter>\n'
-
+        
+        # Generate the filter directories
+        filter_dirs = list(set(headers_dirs).union(set(sources_dirs)).union(set(others_dirs)))
+        for d in filter_dirs:
+            filters += f'\t\t<Filter Include="{d}">\n\t\t\t<UniqueIdentifier>{{{str(uuid.uuid4())}}}</UniqueIdentifier>\n\t\t</Filter>\n'
         filters_template = filters_template.replace("%%FILTERS%%", filters)
 
         filters = ""
         for file in headers:
             filters += (
-                f'<ClInclude Include="{file}"><Filter>Header Files\\{os.path.dirname(file)}</Filter></ClInclude>\n'
+                f'\t<ClInclude Include="{file[1]}"><Filter>{os.path.dirname(file[0])}</Filter></ClInclude>\n'
             )
         filters_template = filters_template.replace("%%INCLUDES%%", filters)
 
         filters = ""
         for file in sources:
             filters += (
-                f'<ClCompile Include="{file}"><Filter>Source Files\\{os.path.dirname(file)}</Filter></ClCompile>\n'
+                f'\t<ClCompile Include="{file[1]}"><Filter>{os.path.dirname(file[0])}</Filter></ClCompile>\n'
             )
 
         filters_template = filters_template.replace("%%COMPILES%%", filters)
 
         filters = ""
         for file in others:
-            filters += f'<None Include="{file}"><Filter>Other Files\\{os.path.dirname(file)}</Filter></None>\n'
+            filters += f'\t<None Include="{file[1]}"><Filter>{os.path.dirname(file[0])}</Filter></None>\n'
         filters_template = filters_template.replace("%%OTHERS%%", filters)
 
         filters_template = filters_template.replace("%%HASH%%", md5)
 
-        with open(f"{project_name}.vcxproj.filters", "w") as f:
+        with open(f"{project_dir}/{project_name}.vcxproj.filters", "w") as f:
             f.write(filters_template)
 
     envsources = []
@@ -1327,38 +1380,25 @@ def generate_vs_project(env, original_args, project_name="godot"):
 
     all_items = []
     properties = []
-    activeItems = []
     extraItems = []
 
     set_headers = set(headers_active)
     set_sources = set(sources_active)
     set_others = set(others_active)
-    for file in headers:
-        all_items.append(f'<ClInclude Include="{file}">')
-        all_items.append(
-            f"  <ExcludedFromBuild Condition=\"!$(ActiveProjectItemList.Contains(';{file};'))\">true</ExcludedFromBuild>"
-        )
+    for obj in headers:
+        file = obj[0]
+        all_items.append(f'<ClInclude Include="{obj[1]}">')
         all_items.append("</ClInclude>")
-        if file in set_headers:
-            activeItems.append(file)
 
-    for file in sources:
-        all_items.append(f'<ClCompile Include="{file}">')
-        all_items.append(
-            f"  <ExcludedFromBuild Condition=\"!$(ActiveProjectItemList.Contains(';{file};'))\">true</ExcludedFromBuild>"
-        )
+    for obj in sources:
+        file = obj[0]
+        all_items.append(f'<ClCompile Include="{obj[1]}">')
         all_items.append("</ClCompile>")
-        if file in set_sources:
-            activeItems.append(file)
 
-    for file in others:
-        all_items.append(f'<None Include="{file}">')
-        all_items.append(
-            f"  <ExcludedFromBuild Condition=\"!$(ActiveProjectItemList.Contains(';{file};'))\">true</ExcludedFromBuild>"
-        )
+    for obj in others:
+        file = obj[0]
+        all_items.append(f'<None Include="{obj[1]}">')
         all_items.append("</None>")
-        if file in set_others:
-            activeItems.append(file)
 
     if vs_configuration:
         vsconf = ""
@@ -1368,8 +1408,28 @@ def generate_vs_project(env, original_args, project_name="godot"):
                 break
 
         condition = "'$(GodotConfiguration)|$(GodotPlatform)'=='" + vsconf + "'"
-        properties.append("<ActiveProjectItemList>;" + ";".join(activeItems) + ";</ActiveProjectItemList>")
-        output = f'bin\\godot{env["PROGSUFFIX"]}'
+
+        def get_suffix(dev_build=False):
+            suffix = "." + "windows"
+            suffix += "." + env["target"]
+            if dev_build:
+                suffix += ".dev"
+
+            if env["precision"] == "double":
+                suffix += ".double"
+
+            suffix += "." + env["arch"]
+
+            if not env["threads"]:
+                suffix += ".nothreads"
+
+            suffix += env.extra_suffix
+            suffix += env.module_version_string + ".exe"
+            return suffix
+
+        output = os.path.relpath(f'bin\\godot{get_suffix(False)}', project_dir)
+        output_dir = os.path.relpath("bin", project_dir)
+        intermediate_dir = os.path.relpath(f'obj', project_dir)
 
         props_template = open("misc/msvs/props.template", "r").read()
 
@@ -1383,22 +1443,31 @@ def generate_vs_project(env, original_args, project_name="godot"):
         props_template = props_template.replace(
             "%%DEFINES%%", ";".join([format_key_value(v) for v in list(env["CPPDEFINES"])])
         )
-        props_template = props_template.replace("%%INCLUDES%%", ";".join([str(j) for j in env["CPPPATH"]]))
+
+        includes = ";".join([str(j) for j in env["CPPPATH"]])
+        includes = includes + f";{os.getcwd()}"
+        props_template = props_template.replace("%%INCLUDES%%", includes)
         props_template = props_template.replace(
             "%%OPTIONS%%",
             " ".join(env["CCFLAGS"]) + " " + " ".join([x for x in env["CXXFLAGS"] if not x.startswith("$")]),
+        )
+        props_template = props_template.replace("%%FOOTER%%",  
+         f"\n\t<PropertyGroup Condition=\"'$(DevBuild)' == 'No'\">\n\t\t<NMakeOutput>{os.path.relpath(f'bin\\godot{get_suffix(False)}', project_dir)}</NMakeOutput>\n\t</PropertyGroup>"
+        +f"\n\t<PropertyGroup Condition=\"'$(DevBuild)' == 'Yes'\">\n\t<NMakeOutput>{os.path.relpath(f'bin\\godot{get_suffix(True)}', project_dir)}</NMakeOutput>\n\t</PropertyGroup>"
         )
 
         # Windows allows us to have spaces in paths, so we need
         # to double quote off the directory. However, the path ends
         # in a backslash, so we need to remove this, lest it escape the
         # last double quote off, confusing MSBuild
+        scons_dir = os.getcwd()
         common_build_postfix = [
-            "--directory=&quot;$(ProjectDir.TrimEnd(&apos;\\&apos;))&quot;",
+            f"--directory=&quot;{scons_dir}&quot;",
             "progress=no",
             f"platform={platform}",
             f"target={target}",
             f"arch={arch}",
+            f"dev_build=$(DevBuild)"
         ]
 
         for arg, value in filtered_args.items():
@@ -1428,14 +1497,14 @@ def generate_vs_project(env, original_args, project_name="godot"):
         cmd = " ^&amp; ".join(common_build_prefix + [" ".join([commands] + cmd_clean)])
         props_template = props_template.replace("%%CLEAN%%", cmd)
 
-        with open(f"{project_name}.{platform}.{target}.{arch}.generated.props", "w") as f:
+        with open(f"{project_dir}/{project_name}.{platform}.{target}.{arch}.generated.props", "w") as f:
             f.write(props_template)
 
     proj_uuid = str(uuid.uuid4())
     sln_uuid = str(uuid.uuid4())
 
-    if os.path.exists(f"{project_name}.sln"):
-        for line in open(f"{project_name}.sln", "r").read().splitlines():
+    if os.path.exists(f"{project_dir}/{project_name}.sln"):
+        for line in open(f"{project_dir}/{project_name}.sln", "r").read().splitlines():
             if line.startswith('Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}")'):
                 proj_uuid = re.search(
                     r"\"{(\b[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-\b[0-9a-fA-F]{12}\b)}\"$",
@@ -1469,38 +1538,42 @@ def generate_vs_project(env, original_args, project_name="godot"):
                 ]
 
             for t in conf["targets"]:
-                godot_target = t
+                godot_target = t[0]
+                vs_target = t[1]
+                dev_build = t[2]
 
                 # Windows x86 is a special little flower that requires a project platform == Win32 but a solution platform == x86.
-                if godot_platform == "windows" and godot_target == "editor" and godot_arch == "x86_32":
-                    sln_plat = "x86"
+                # if godot_platform == "windows" and godot_target == "editor" and godot_arch == "x86_32":
+                #     sln_plat = "x86"
 
                 configurations += [
-                    f'<ProjectConfiguration Include="{godot_target}|{proj_plat}">',
-                    f"  <Configuration>{godot_target}</Configuration>",
+                    f'<ProjectConfiguration Include="{vs_target}|{proj_plat}">',
+                    f"  <Configuration>{vs_target}</Configuration>",
                     f"  <Platform>{proj_plat}</Platform>",
                     "</ProjectConfiguration>",
                 ]
 
                 properties += [
-                    f"<PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='{godot_target}|{proj_plat}'\">",
+                    f"<PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='{vs_target}|{proj_plat}'\">",
                     f"  <GodotConfiguration>{godot_target}</GodotConfiguration>",
                     f"  <GodotPlatform>{proj_plat}</GodotPlatform>",
+                    f"  <DevBuild>{dev_build}</DevBuild>",
                     "</PropertyGroup>",
                 ]
 
                 if godot_platform != "windows":
                     configurations += [
-                        f'<ProjectConfiguration Include="editor|{proj_plat}">',
+                        f'<ProjectConfiguration Include="{vs_target}|{proj_plat}">',
                         f"  <Configuration>editor</Configuration>",
                         f"  <Platform>{proj_plat}</Platform>",
                         "</ProjectConfiguration>",
                     ]
 
                     properties += [
-                        f"<PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='editor|{proj_plat}'\">",
+                        f"<PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='{vs_target}|{proj_plat}'\">",
                         f"  <GodotConfiguration>editor</GodotConfiguration>",
                         f"  <GodotPlatform>{proj_plat}</GodotPlatform>",
+                        f"  <DevBuild>{dev_build}</DevBuild>",
                         "</PropertyGroup>",
                     ]
 
@@ -1509,11 +1582,11 @@ def generate_vs_project(env, original_args, project_name="godot"):
                     f'<Import Project="$(MSBuildProjectDirectory)\\{p}" Condition="Exists(\'$(MSBuildProjectDirectory)\\{p}\')"/>'
                 ]
 
-                section1 += [f"{godot_target}|{sln_plat} = {godot_target}|{sln_plat}"]
+                section1 += [f"{vs_target}|{sln_plat} = {vs_target}|{sln_plat}"]
 
                 section2 += [
-                    f"{{{proj_uuid}}}.{godot_target}|{sln_plat}.ActiveCfg = {godot_target}|{proj_plat}",
-                    f"{{{proj_uuid}}}.{godot_target}|{sln_plat}.Build.0 = {godot_target}|{proj_plat}",
+                    f"{{{proj_uuid}}}.{vs_target}|{sln_plat}.ActiveCfg = {vs_target}|{proj_plat}",
+                    f"{{{proj_uuid}}}.{vs_target}|{sln_plat}.Build.0 = {vs_target}|{proj_plat}",
                 ]
 
     # Add an extra import for a local user props file at the end, so users can add more overrides.
@@ -1530,8 +1603,10 @@ def generate_vs_project(env, original_args, project_name="godot"):
     proj_template = proj_template.replace("%%IMPORTS%%", "\n  ".join(imports))
     proj_template = proj_template.replace("%%DEFAULT_ITEMS%%", "\n    ".join(all_items))
     proj_template = proj_template.replace("%%PROPERTIES%%", "\n  ".join(properties))
+    proj_template = proj_template.replace("%%OUTPUT_DIR%%", f"{output_dir}")
+    proj_template = proj_template.replace("%%INTERMEDIATE_DIR%%", f"{intermediate_dir}")
 
-    with open(f"{project_name}.vcxproj", "w") as f:
+    with open(f"{project_dir}\\{project_name}.vcxproj", "w") as f:
         f.write(proj_template)
 
     sln_template = open("misc/msvs/sln.template", "r").read()
@@ -1540,7 +1615,7 @@ def generate_vs_project(env, original_args, project_name="godot"):
     sln_template = sln_template.replace("%%SLNUUID%%", sln_uuid)
     sln_template = sln_template.replace("%%SECTION1%%", "\n    ".join(section1))
     sln_template = sln_template.replace("%%SECTION2%%", "\n    ".join(section2))
-    with open(f"{project_name}.sln", "w") as f:
+    with open(f"{project_dir}\\{project_name}.sln", "w") as f:
         f.write(sln_template)
 
     if get_bool(original_args, "vsproj_gen_only", True):

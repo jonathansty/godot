@@ -15,8 +15,8 @@
     <ConfigurationType>Makefile</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <PlatformToolset>v143</PlatformToolset>
-    <OutDir>$(SolutionDir)\bin\$(GodotPlatform)\$(GodotConfiguration)\</OutDir>
-    <IntDir>obj\$(GodotPlatform)\$(GodotConfiguration)\</IntDir>
+    <OutDir>%%OUTPUT_DIR%%\$(GodotPlatform)\$(GodotConfiguration)</OutDir>
+    <IntDir>%%INTERMEDIATE_DIR%%\$(GodotPlatform)\$(GodotConfiguration)\</IntDir>
     <LayoutDir>$(OutDir)\Layout</LayoutDir>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />

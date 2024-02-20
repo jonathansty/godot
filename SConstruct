@@ -212,6 +212,7 @@ opts.Add("extra_suffix", "Custom extra suffix added to the base filename of all 
 opts.Add("object_prefix", "Custom prefix added to the base filename of all generated object files", "")
 opts.Add(BoolVariable("vsproj", "Generate a Visual Studio solution", False))
 opts.Add("vsproj_name", "Name of the Visual Studio solution", "godot")
+opts.Add("vsproj_dir", "Directory of the Visual Studio solution", "vs")
 opts.Add("import_env_vars", "A comma-separated list of environment variables to copy from the outer environment.", "")
 opts.Add(BoolVariable("disable_3d", "Disable 3D nodes for a smaller executable", False))
 opts.Add(BoolVariable("disable_advanced_gui", "Disable advanced GUI nodes and behaviors", False))
@@ -1000,7 +1001,7 @@ if selected_platform in platform_list:
     # Microsoft Visual Studio Project Generation
     if env["vsproj"]:
         env["CPPPATH"] = [Dir(path) for path in env["CPPPATH"]]
-        methods.generate_vs_project(env, ARGUMENTS, env["vsproj_name"])
+        methods.generate_vs_project(env, ARGUMENTS, env["vsproj_name"], env["vsproj_dir"])
         methods.generate_cpp_hint_file("cpp.hint")
 
     # Check for the existence of headers

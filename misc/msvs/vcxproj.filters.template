@@ -1,28 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Source Files">
-      <UniqueIdentifier>%%UUID1%%</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>%%UUID2%%</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>%%UUID3%%</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Scripts">
-      <UniqueIdentifier>%%UUID4%%</UniqueIdentifier>
-    </Filter>
-    %%FILTERS%%
+%%FILTERS%%
   </ItemGroup>
   <ItemGroup>
-    %%COMPILES%%
+%%COMPILES%%
   </ItemGroup>
   <ItemGroup>
-    %%INCLUDES%%
+%%INCLUDES%%
   </ItemGroup>
   <ItemGroup>
-    %%OTHERS%%
+%%OTHERS%%
   </ItemGroup>
 </Project>
 <!-- CHECKSUM

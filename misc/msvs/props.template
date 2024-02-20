@@ -18,4 +18,5 @@
   <ItemGroup Condition="%%CONDITION%%">
     %%EXTRA_ITEMS%%
   </ItemGroup>
+%%FOOTER%%
 </Project>
