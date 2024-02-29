@@ -4,7 +4,6 @@
     <NMakeBuildCommandLine>%%BUILD%%</NMakeBuildCommandLine>
     <NMakeReBuildCommandLine>%%REBUILD%%</NMakeReBuildCommandLine>
     <NMakeCleanCommandLine>%%CLEAN%%</NMakeCleanCommandLine>
-    <NMakeOutput>%%OUTPUT%%</NMakeOutput>
     <NMakePreprocessorDefinitions>%%DEFINES%%</NMakePreprocessorDefinitions>
     <NMakeIncludeSearchPath>%%INCLUDES%%</NMakeIncludeSearchPath>
     <NMakeForcedIncludes>$(NMakeForcedIncludes)</NMakeForcedIncludes>

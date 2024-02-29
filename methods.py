@@ -209,6 +209,18 @@ def get_version_info(module_version_string="", silent=False):
             githash = head
 
     version_info["git_hash"] = githash
+    # Fallback to 0 as a timestamp (will be treated as "unknown" in the engine).
+    version_info["git_timestamp"] = 0
+
+    # Get the UNIX timestamp of the build commit.
+    if os.path.exists(".git"):
+        try:
+            version_info["git_timestamp"] = subprocess.check_output(
+                ["git", "log", "-1", "--pretty=format:%ct", githash]
+            ).decode("utf-8")
+        except (subprocess.CalledProcessError, OSError):
+            # `git` not found in PATH.
+            pass
 
     return version_info
 
@@ -246,6 +258,7 @@ def generate_version_header(module_version_string=""):
         """/* THIS FILE IS GENERATED DO NOT EDIT */
 #include "core/version.h"
 const char *const VERSION_HASH = "{git_hash}";
+const uint64_t VERSION_TIMESTAMP = {git_timestamp};
 """.format(
             **version_info
         )
@@ -1156,6 +1169,11 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
     # This lets projects be regenerated even if there are build errors.
     filtered_args.pop("vsproj_gen_only", None)
 
+    # This flag allows users to regenerate only the props file without touching the sln or vcxproj files.
+    # This preserves any customizations users have done to the solution, while still updating the file list
+    # and build commands.
+    filtered_args.pop("vsproj_props_only", None)
+
     # The "progress" option is ignored as the current compilation progress indication doesn't work in VS
     filtered_args.pop("progress", None)
 
@@ -1409,6 +1427,30 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
 
         condition = "'$(GodotConfiguration)|$(GodotPlatform)'=='" + vsconf + "'"
 
+
+        output_dir = os.path.relpath("bin", project_dir)
+        intermediate_dir = os.path.relpath(f'obj', project_dir)
+
+        props_template = open("misc/msvs/props.template", "r").read()
+
+        props_template = props_template.replace("%%VSCONF%%", vsconf)
+        props_template = props_template.replace("%%CONDITION%%", condition)
+        props_template = props_template.replace("%%PROPERTIES%%", "\n    ".join(properties))
+        props_template = props_template.replace("%%EXTRA_ITEMS%%", "\n    ".join(extraItems))
+
+        props_template = props_template.replace(
+            "%%DEFINES%%", ";".join([format_key_value(v) for v in list(env["CPPDEFINES"])])
+        )
+
+        includes = ";".join([str(j) for j in env["CPPPATH"]])
+        includes = includes + f";{os.getcwd()}"
+        props_template = props_template.replace("%%INCLUDES%%", includes)
+        props_template = props_template.replace(
+            "%%OPTIONS%%",
+            " ".join(env["CCFLAGS"]) + " " + " ".join([x for x in env["CXXFLAGS"] if not x.startswith("$")]),
+        )
+
+        # Returns the suffix needed for the exe
         def get_suffix(dev_build=False):
             suffix = "." + "windows"
             suffix += "." + env["target"]
@@ -1427,30 +1469,6 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
             suffix += env.module_version_string + ".exe"
             return suffix
 
-        output = os.path.relpath(f'bin\\godot{get_suffix(False)}', project_dir)
-        output_dir = os.path.relpath("bin", project_dir)
-        intermediate_dir = os.path.relpath(f'obj', project_dir)
-
-        props_template = open("misc/msvs/props.template", "r").read()
-
-        props_template = props_template.replace("%%VSCONF%%", vsconf)
-        props_template = props_template.replace("%%CONDITION%%", condition)
-        props_template = props_template.replace("%%PROPERTIES%%", "\n    ".join(properties))
-        props_template = props_template.replace("%%EXTRA_ITEMS%%", "\n    ".join(extraItems))
-
-        props_template = props_template.replace("%%OUTPUT%%", output)
-
-        props_template = props_template.replace(
-            "%%DEFINES%%", ";".join([format_key_value(v) for v in list(env["CPPDEFINES"])])
-        )
-
-        includes = ";".join([str(j) for j in env["CPPPATH"]])
-        includes = includes + f";{os.getcwd()}"
-        props_template = props_template.replace("%%INCLUDES%%", includes)
-        props_template = props_template.replace(
-            "%%OPTIONS%%",
-            " ".join(env["CCFLAGS"]) + " " + " ".join([x for x in env["CXXFLAGS"] if not x.startswith("$")]),
-        )
         props_template = props_template.replace("%%FOOTER%%",  
          f"\n\t<PropertyGroup Condition=\"'$(DevBuild)' == 'No'\">\n\t\t<NMakeOutput>{os.path.relpath(f'bin\\godot{get_suffix(False)}', project_dir)}</NMakeOutput>\n\t</PropertyGroup>"
         +f"\n\t<PropertyGroup Condition=\"'$(DevBuild)' == 'Yes'\">\n\t<NMakeOutput>{os.path.relpath(f'bin\\godot{get_suffix(True)}', project_dir)}</NMakeOutput>\n\t</PropertyGroup>"
@@ -1475,6 +1493,8 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
 
         cmd_rebuild = [
             "vsproj=yes",
+            "vsproj_props_only=yes",
+            "vsproj_gen_only=no",
             f"vsproj_name={project_name}",
         ] + common_build_postfix
 
@@ -1596,7 +1616,13 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
     section1 = sorted(section1)
     section2 = sorted(section2)
 
-    proj_template = open("misc/msvs/vcxproj.template", "r").read()
+    if not get_bool(original_args, "vsproj_props_only", False):
+        proj_template = open("misc/msvs/vcxproj.template", "r").read()
+        proj_template = proj_template.replace("%%UUID%%", proj_uuid)
+        proj_template = proj_template.replace("%%CONFS%%", "\n    ".join(configurations))
+        proj_template = proj_template.replace("%%IMPORTS%%", "\n  ".join(imports))
+        proj_template = proj_template.replace("%%DEFAULT_ITEMS%%", "\n    ".join(all_items))
+        proj_template = proj_template.replace("%%PROPERTIES%%", "\n  ".join(properties))
 
     proj_template = proj_template.replace("%%UUID%%", proj_uuid)
     proj_template = proj_template.replace("%%CONFS%%", "\n    ".join(configurations))

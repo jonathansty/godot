@@ -863,6 +863,7 @@ void EditorPropertyDictionary::update_property() {
 		if (!container) {
 			container = memnew(MarginContainer);
 			container->set_theme_type_variation("MarginContainer4px");
+			container->set_mouse_filter(MOUSE_FILTER_STOP);
 			add_child(container);
 			set_bottom_editor(container);
 
@@ -1286,7 +1287,7 @@ EditorPropertyDictionary::EditorPropertyDictionary() {
 
 ///////////////////// LOCALIZABLE STRING ///////////////////////////
 
-void EditorPropertyLocalizableString::_property_changed(const String &p_property, Variant p_value, const String &p_name, bool p_changing) {
+void EditorPropertyLocalizableString::_property_changed(const String &p_property, const Variant &p_value, const String &p_name, bool p_changing) {
 	if (p_property.begins_with("indices")) {
 		int index = p_property.get_slice("/", 1).to_int();
 

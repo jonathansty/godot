@@ -35,9 +35,9 @@
 
 #include "core/config/project_settings.h"
 #include "core/io/marshalls.h"
+#include "core/version.h"
 #include "drivers/png/png_driver_common.h"
 #include "main/main.h"
-#include "scene/resources/atlas_texture.h"
 
 #if defined(VULKAN_ENABLED)
 #include "rendering_context_driver_vulkan_windows.h"
@@ -51,6 +51,9 @@
 
 #include <avrt.h>
 #include <dwmapi.h>
+#include <propkey.h>
+#include <propvarutil.h>
+#include <shellapi.h>
 #include <shlwapi.h>
 #include <shobjidl.h>
 #include <wbemcli.h>
@@ -1375,6 +1378,15 @@ void DisplayServerWindows::delete_sub_window(WindowID p_window) {
 
 	WindowData &wd = windows[p_window];
 
+	IPropertyStore *prop_store;
+	HRESULT hr = SHGetPropertyStoreForWindow(wd.hWnd, IID_IPropertyStore, (void **)&prop_store);
+	if (hr == S_OK) {
+		PROPVARIANT val;
+		PropVariantInit(&val);
+		prop_store->SetValue(PKEY_AppUserModel_ID, val);
+		prop_store->Release();
+	}
+
 	while (wd.transient_children.size()) {
 		window_set_transient(*wd.transient_children.begin(), INVALID_WINDOW_ID);
 	}
@@ -2380,38 +2392,10 @@ void DisplayServerWindows::cursor_set_custom_image(const Ref<Resource> &p_cursor
 			cursors_cache.erase(p_shape);
 		}
 
-		Ref<Texture2D> texture = p_cursor;
-		ERR_FAIL_COND(!texture.is_valid());
-		Ref<AtlasTexture> atlas_texture = p_cursor;
-		Size2 texture_size;
 		Rect2 atlas_rect;
-
-		if (atlas_texture.is_valid()) {
-			texture = atlas_texture->get_atlas();
-
-			atlas_rect.size.width = texture->get_width();
-			atlas_rect.size.height = texture->get_height();
-			atlas_rect.position.x = atlas_texture->get_region().position.x;
-			atlas_rect.position.y = atlas_texture->get_region().position.y;
-			texture_size.width = atlas_texture->get_region().size.x;
-			texture_size.height = atlas_texture->get_region().size.y;
-		} else {
-			texture_size.width = texture->get_width();
-			texture_size.height = texture->get_height();
-		}
-
-		ERR_FAIL_COND(p_hotspot.x < 0 || p_hotspot.y < 0);
-		ERR_FAIL_COND(texture_size.width > 256 || texture_size.height > 256);
-		ERR_FAIL_COND(p_hotspot.x > texture_size.width || p_hotspot.y > texture_size.height);
-
-		Ref<Image> image = texture->get_image();
-
-		ERR_FAIL_COND(!image.is_valid());
-		if (image->is_compressed()) {
-			image = image->duplicate(true);
-			Error err = image->decompress();
-			ERR_FAIL_COND_MSG(err != OK, "Couldn't decompress VRAM-compressed custom mouse cursor image. Switch to a lossless compression mode in the Import dock.");
-		}
+		Ref<Image> image = _get_cursor_image_from_resource(p_cursor, p_hotspot, atlas_rect);
+		ERR_FAIL_COND(image.is_null());
+		Vector2i texture_size = image->get_size();
 
 		UINT image_size = texture_size.width * texture_size.height;
 
@@ -2440,7 +2424,7 @@ void DisplayServerWindows::cursor_set_custom_image(const Ref<Resource> &p_cursor
 			int row_index = floor(index / texture_size.width) + atlas_rect.position.y;
 			int column_index = (index % int(texture_size.width)) + atlas_rect.position.x;
 
-			if (atlas_texture.is_valid()) {
+			if (atlas_rect.has_area()) {
 				column_index = MIN(column_index, atlas_rect.size.width - 1);
 				row_index = MIN(row_index, atlas_rect.size.height - 1);
 			}
@@ -3081,9 +3065,9 @@ void DisplayServerWindows::set_context(Context p_context) {
 #define SIGNATURE_MASK 0xFFFFFF00
 // Keeping the name suggested by Microsoft, but this macro really answers:
 // Is this mouse event emulated from touch or pen input?
-#define IsPenEvent(dw) (((dw)&SIGNATURE_MASK) == MI_WP_SIGNATURE)
+#define IsPenEvent(dw) (((dw) & SIGNATURE_MASK) == MI_WP_SIGNATURE)
 // This one tells whether the event comes from touchscreen (and not from pen).
-#define IsTouchEvent(dw) (IsPenEvent(dw) && ((dw)&0x80))
+#define IsTouchEvent(dw) (IsPenEvent(dw) && ((dw) & 0x80))
 
 void DisplayServerWindows::_touch_event(WindowID p_window, bool p_pressed, float p_x, float p_y, int idx) {
 	if (touch_state.has(idx) == p_pressed) {
@@ -4956,6 +4940,33 @@ DisplayServer::WindowID DisplayServerWindows::_create_window(WindowMode p_mode, 
 		wd.last_pressure_update = 0;
 		wd.last_tilt = Vector2();
 
+		IPropertyStore *prop_store;
+		HRESULT hr = SHGetPropertyStoreForWindow(wd.hWnd, IID_IPropertyStore, (void **)&prop_store);
+		if (hr == S_OK) {
+			PROPVARIANT val;
+			String appname;
+			if (Engine::get_singleton()->is_editor_hint()) {
+				appname = "Godot.GodotEditor." + String(VERSION_BRANCH);
+			} else {
+				String name = GLOBAL_GET("application/config/name");
+				String version = GLOBAL_GET("application/config/version");
+				if (version.is_empty()) {
+					version = "0";
+				}
+				String clean_app_name = name.to_pascal_case();
+				for (int i = 0; i < clean_app_name.length(); i++) {
+					if (!is_ascii_alphanumeric_char(clean_app_name[i]) && clean_app_name[i] != '_' && clean_app_name[i] != '.') {
+						clean_app_name[i] = '_';
+					}
+				}
+				clean_app_name = clean_app_name.substr(0, 120 - version.length()).trim_suffix(".");
+				appname = "Godot." + clean_app_name + "." + version;
+			}
+			InitPropVariantFromString((PCWSTR)appname.utf16().get_data(), &val);
+			prop_store->SetValue(PKEY_AppUserModel_ID, val);
+			prop_store->Release();
+		}
+
 		// IME.
 		wd.im_himc = ImmGetContext(wd.hWnd);
 		ImmAssociateContext(wd.hWnd, (HIMC)0);
@@ -5354,6 +5365,26 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 	}
 #endif
 
+	String appname;
+	if (Engine::get_singleton()->is_editor_hint()) {
+		appname = "Godot.GodotEditor." + String(VERSION_BRANCH);
+	} else {
+		String name = GLOBAL_GET("application/config/name");
+		String version = GLOBAL_GET("application/config/version");
+		if (version.is_empty()) {
+			version = "0";
+		}
+		String clean_app_name = name.to_pascal_case();
+		for (int i = 0; i < clean_app_name.length(); i++) {
+			if (!is_ascii_alphanumeric_char(clean_app_name[i]) && clean_app_name[i] != '_' && clean_app_name[i] != '.') {
+				clean_app_name[i] = '_';
+			}
+		}
+		clean_app_name = clean_app_name.substr(0, 120 - version.length()).trim_suffix(".");
+		appname = "Godot." + clean_app_name + "." + version;
+	}
+	SetCurrentProcessExplicitAppUserModelID((PCWSTR)appname.utf16().get_data());
+
 	mouse_monitor = SetWindowsHookEx(WH_MOUSE, ::MouseProc, nullptr, GetCurrentThreadId());
 
 	Point2i window_position;
@@ -5479,7 +5510,7 @@ DisplayServerWindows::~DisplayServerWindows() {
 	cursors_cache.clear();
 
 	// Destroy all status indicators.
-	for (HashMap<IndicatorID, IndicatorData>::Iterator E = indicators.begin(); E;) {
+	for (HashMap<IndicatorID, IndicatorData>::Iterator E = indicators.begin(); E; ++E) {
 		NOTIFYICONDATAW ndat;
 		ZeroMemory(&ndat, sizeof(NOTIFYICONDATAW));
 		ndat.cbSize = sizeof(NOTIFYICONDATAW);
