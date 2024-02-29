@@ -1080,7 +1080,7 @@ def create_filter_obj(path, project_dir="vs", is_custom_module=False):
     vspath = os.path.abspath(project_dir.replace("/", "\\"))
     wpath = os.path.abspath(str(path).replace("/", "\\"))
 
-    filter = ""
+    filter = "Engine\\"
     if is_custom_module:
         filter += "Custom Modules\\"
     filter += str(path).replace("/", "\\")
@@ -1241,7 +1241,7 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
 
         # Glob all files and add it to the right directories
         def glob_and_append(patterns, dirs, files):
-            custom_prefix = "modules"
+            custom_prefix = "Game\\modules"
 
             for pattern in patterns.split(";"):
                 tmp_dirs = []
@@ -1579,7 +1579,7 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
 
                 p = f"{project_name}.{godot_platform}.{godot_target}.{godot_arch}.generated.props"
                 imports += [
-                    f'<Import Project="$(MSBuildProjectDirectory)\\{p}" Condition="Exists(\'$(MSBuildProjectDirectory)\\{p}\')"/>'
+                    f'<Import Project="$(MSBuildProjectDirectory)\\{p}" Condition="Exists(\'$(MSBuildProjectDirectory)\\{p}\') AND \'$(Configuration)|$(Platform)\'==\'{vs_target}|{proj_plat}\'"/>'
                 ]
 
                 section1 += [f"{vs_target}|{sln_plat} = {vs_target}|{sln_plat}"]
