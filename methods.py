@@ -1,4 +1,5 @@
-import os
+       with open(f"{project_dir}/{project_name}.sln", "w", encoding="utf-8", newline="\n") as f:
+            f.write(sln_template)import os
 import sys
 import re
 import glob
@@ -230,7 +231,7 @@ def generate_version_header(module_version_string=""):
 
     # NOTE: It is safe to generate these files here, since this is still executed serially.
 
-    f = open("core/version_generated.gen.h", "w")
+    f = open("core/version_generated.gen.h", "w", encoding="utf-8", newline="\n")
     f.write(
         """/* THIS FILE IS GENERATED DO NOT EDIT */
 #ifndef VERSION_GENERATED_GEN_H
@@ -253,7 +254,7 @@ def generate_version_header(module_version_string=""):
     )
     f.close()
 
-    fhash = open("core/version_hash.gen.cpp", "w")
+    fhash = open("core/version_hash.gen.cpp", "w", encoding="utf-8", newline="\n")
     fhash.write(
         """/* THIS FILE IS GENERATED DO NOT EDIT */
 #include "core/version.h"
@@ -384,7 +385,7 @@ def is_module(path):
 
 
 def write_disabled_classes(class_list):
-    f = open("core/disabled_classes.gen.h", "w")
+    f = open("core/disabled_classes.gen.h", "w", encoding="utf-8", newline="\n")
     f.write("/* THIS FILE IS GENERATED DO NOT EDIT */\n")
     f.write("#ifndef DISABLED_CLASSES_GEN_H\n")
     f.write("#define DISABLED_CLASSES_GEN_H\n\n")
@@ -435,7 +436,7 @@ void uninitialize_modules(ModuleInitializationLevel p_level) {
     )
 
     # NOTE: It is safe to generate this file here, since this is still executed serially
-    with open("modules/register_module_types.gen.cpp", "w") as f:
+    with open("modules/register_module_types.gen.cpp", "w", encoding="utf-8", newline="\n") as f:
         f.write(modules_cpp)
 
 
@@ -757,7 +758,7 @@ def generate_cpp_hint_file(filename):
         pass
     else:
         try:
-            with open(filename, "w") as fd:
+            with open(filename, "w", encoding="utf-8", newline="\n") as fd:
                 fd.write("#define GDCLASS(m_class, m_inherits)\n")
         except OSError:
             print("Could not write cpp.hint file.")
@@ -1062,7 +1063,7 @@ def show_progress(env):
     def progress_finish(target, source, env):
         nonlocal node_count, progressor
         try:
-            with open(node_count_fname, "w") as f:
+            with open(node_count_fname, "w", encoding="utf-8", newline="\n") as f:
                 f.write("%d\n" % node_count)
             progressor.delete(progressor.file_list())
         except Exception:
@@ -1092,7 +1093,7 @@ def dump(env):
     def non_serializable(obj):
         return "<<non-serializable: %s>>" % (type(obj).__qualname__)
 
-    with open(".scons_env.json", "w") as f:
+    with open(".scons_env.json", "w", encoding="utf-8", newline="\n") as f:
         dump(env.Dictionary(), f, indent=4, default=non_serializable)
 
 
@@ -1347,7 +1348,7 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
 
         filters_template = filters_template.replace("%%HASH%%", md5)
 
-        with open(f"{project_dir}/{project_name}.vcxproj.filters", "w") as f:
+        with open(f"{project_dir}/{project_name}.vcxproj.filters", "w", encoding="utf-8", newline="\n") as f:
             f.write(filters_template)
 
     envsources = []
@@ -1524,7 +1525,9 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
         cmd = " ^&amp; ".join(common_build_prefix + [" ".join([commands] + cmd_clean)])
         props_template = props_template.replace("%%CLEAN%%", cmd)
 
-        with open(f"{project_dir}/{project_name}.{platform}.{target}.{arch}.generated.props", "w") as f:
+        with open(
+            f"{project_name}.{platform}.{target}.{arch}.generated.props", "w", encoding="utf-8", newline="\n"
+        ) as f:
             f.write(props_template)
 
     proj_uuid = str(uuid.uuid4())
@@ -1624,32 +1627,26 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
     section2 = sorted(section2)
 
     if not get_bool(original_args, "vsproj_props_only", False):
-        proj_template = open("misc/msvs/vcxproj.template", "r").read()
-        proj_template = proj_template.replace("%%UUID%%", proj_uuid)
-        proj_template = proj_template.replace("%%CONFS%%", "\n    ".join(configurations))
-        proj_template = proj_template.replace("%%IMPORTS%%", "\n  ".join(imports))
-        proj_template = proj_template.replace("%%DEFAULT_ITEMS%%", "\n    ".join(all_items))
-        proj_template = proj_template.replace("%%PROPERTIES%%", "\n  ".join(properties))
+    	proj_template = proj_template.replace("%%UUID%%", proj_uuid)
+    	proj_template = proj_template.replace("%%CONFS%%", "\n    ".join(configurations))
+    	proj_template = proj_template.replace("%%IMPORTS%%", "\n  ".join(imports))
+    	proj_template = proj_template.replace("%%DEFAULT_ITEMS%%", "\n    ".join(all_items))
+    	proj_template = proj_template.replace("%%PROPERTIES%%", "\n  ".join(properties))
+    	proj_template = proj_template.replace("%%OUTPUT_DIR%%", f"{output_dir}")
+    	proj_template = proj_template.replace("%%INTERMEDIATE_DIR%%", f"{intermediate_dir}")
 
-    proj_template = proj_template.replace("%%UUID%%", proj_uuid)
-    proj_template = proj_template.replace("%%CONFS%%", "\n    ".join(configurations))
-    proj_template = proj_template.replace("%%IMPORTS%%", "\n  ".join(imports))
-    proj_template = proj_template.replace("%%DEFAULT_ITEMS%%", "\n    ".join(all_items))
-    proj_template = proj_template.replace("%%PROPERTIES%%", "\n  ".join(properties))
-    proj_template = proj_template.replace("%%OUTPUT_DIR%%", f"{output_dir}")
-    proj_template = proj_template.replace("%%INTERMEDIATE_DIR%%", f"{intermediate_dir}")
+        with open(f"{{project_dir}/project_name}.vcxproj", "w", encoding="utf-8", newline="\n") as f:
+            f.write(proj_template)
 
-    with open(f"{project_dir}\\{project_name}.vcxproj", "w") as f:
-        f.write(proj_template)
-
-    sln_template = open("misc/msvs/sln.template", "r").read()
-    sln_template = sln_template.replace("%%NAME%%", project_name)
-    sln_template = sln_template.replace("%%UUID%%", proj_uuid)
-    sln_template = sln_template.replace("%%SLNUUID%%", sln_uuid)
-    sln_template = sln_template.replace("%%SECTION1%%", "\n    ".join(section1))
-    sln_template = sln_template.replace("%%SECTION2%%", "\n    ".join(section2))
-    with open(f"{project_dir}\\{project_name}.sln", "w") as f:
-        f.write(sln_template)
-
+ 	if not get_bool(original_args, "vsproj_props_only", False):
+    	sln_template = open("misc/msvs/sln.template", "r").read()
+    	sln_template = sln_template.replace("%%NAME%%", project_name)
+    	sln_template = sln_template.replace("%%UUID%%", proj_uuid)
+    	sln_template = sln_template.replace("%%SLNUUID%%", sln_uuid)
+    	sln_template = sln_template.replace("%%SECTION1%%", "\n    ".join(section1))
+    	sln_template = sln_template.replace("%%SECTION2%%", "\n    ".join(section2))
+      	with open(f"{project_dir}/{project_name}.sln", "w", encoding="utf-8", newline="\n") as f:
+            f.write(sln_template)
+            
     if get_bool(original_args, "vsproj_gen_only", True):
         sys.exit()
