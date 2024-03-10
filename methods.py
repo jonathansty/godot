@@ -1,5 +1,4 @@
-       with open(f"{project_dir}/{project_name}.sln", "w", encoding="utf-8", newline="\n") as f:
-            f.write(sln_template)import os
+import os
 import sys
 import re
 import glob
@@ -1627,25 +1626,25 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
     section2 = sorted(section2)
 
     if not get_bool(original_args, "vsproj_props_only", False):
-    	proj_template = proj_template.replace("%%UUID%%", proj_uuid)
-    	proj_template = proj_template.replace("%%CONFS%%", "\n    ".join(configurations))
-    	proj_template = proj_template.replace("%%IMPORTS%%", "\n  ".join(imports))
-    	proj_template = proj_template.replace("%%DEFAULT_ITEMS%%", "\n    ".join(all_items))
-    	proj_template = proj_template.replace("%%PROPERTIES%%", "\n  ".join(properties))
-    	proj_template = proj_template.replace("%%OUTPUT_DIR%%", f"{output_dir}")
-    	proj_template = proj_template.replace("%%INTERMEDIATE_DIR%%", f"{intermediate_dir}")
+        proj_template = proj_template.replace("%%UUID%%", proj_uuid)
+        proj_template = proj_template.replace("%%CONFS%%", "\n    ".join(configurations))
+        proj_template = proj_template.replace("%%IMPORTS%%", "\n  ".join(imports))
+        proj_template = proj_template.replace("%%DEFAULT_ITEMS%%", "\n    ".join(all_items))
+        proj_template = proj_template.replace("%%PROPERTIES%%", "\n  ".join(properties))
+        proj_template = proj_template.replace("%%OUTPUT_DIR%%", f"{output_dir}")
+        proj_template = proj_template.replace("%%INTERMEDIATE_DIR%%", f"{intermediate_dir}")
 
-        with open(f"{{project_dir}/project_name}.vcxproj", "w", encoding="utf-8", newline="\n") as f:
+        with open(f"{project_dir}/{project_name}.vcxproj", "w", encoding="utf-8", newline="\n") as f:
             f.write(proj_template)
-
- 	if not get_bool(original_args, "vsproj_props_only", False):
-    	sln_template = open("misc/msvs/sln.template", "r").read()
-    	sln_template = sln_template.replace("%%NAME%%", project_name)
-    	sln_template = sln_template.replace("%%UUID%%", proj_uuid)
-    	sln_template = sln_template.replace("%%SLNUUID%%", sln_uuid)
-    	sln_template = sln_template.replace("%%SECTION1%%", "\n    ".join(section1))
-    	sln_template = sln_template.replace("%%SECTION2%%", "\n    ".join(section2))
-      	with open(f"{project_dir}/{project_name}.sln", "w", encoding="utf-8", newline="\n") as f:
+    
+    if not get_bool(original_args, "vsproj_props_only", False):
+        sln_template = open("misc/msvs/sln.template", "r").read()
+        sln_template = sln_template.replace("%%NAME%%", project_name)
+        sln_template = sln_template.replace("%%UUID%%", proj_uuid)
+        sln_template = sln_template.replace("%%SLNUUID%%", sln_uuid)
+        sln_template = sln_template.replace("%%SECTION1%%", "\n    ".join(section1))
+        sln_template = sln_template.replace("%%SECTION2%%", "\n    ".join(section2))
+        with open(f"{project_dir}/{project_name}.sln", "w", encoding="utf-8", newline="\n") as f:
             f.write(sln_template)
             
     if get_bool(original_args, "vsproj_gen_only", True):
