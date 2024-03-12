@@ -1492,7 +1492,10 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
             f"platform={platform}",
             f"target={target}",
             f"arch={arch}",
-            f"dev_build=$(DevBuild)"
+            f"dev_build=$(DevBuild)",
+            f"incremental_linking=yes",
+            f"debug_symbols=yes",
+            f"separate_debug_symbols=yes"
         ]
 
         for arg, value in filtered_args.items():
@@ -1524,9 +1527,7 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
         cmd = " ^&amp; ".join(common_build_prefix + [" ".join([commands] + cmd_clean)])
         props_template = props_template.replace("%%CLEAN%%", cmd)
 
-        with open(
-            f"{project_name}.{platform}.{target}.{arch}.generated.props", "w", encoding="utf-8", newline="\n"
-        ) as f:
+        with open(f"{project_dir}/{project_name}.{platform}.{target}.{arch}.generated.props", "w", encoding="utf-8", newline="\n") as f:
             f.write(props_template)
 
     proj_uuid = str(uuid.uuid4())
@@ -1626,6 +1627,7 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
     section2 = sorted(section2)
 
     if not get_bool(original_args, "vsproj_props_only", False):
+        proj_template = open("misc/msvs/vcxproj.template", "r").read()
         proj_template = proj_template.replace("%%UUID%%", proj_uuid)
         proj_template = proj_template.replace("%%CONFS%%", "\n    ".join(configurations))
         proj_template = proj_template.replace("%%IMPORTS%%", "\n  ".join(imports))
