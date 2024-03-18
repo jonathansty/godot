@@ -1250,6 +1250,14 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
         others.append(create_filter_obj(file, project_dir))
 
     # Detect the module files and add these to the project
+    print("Injecting Engine prefix")
+    def add_prefix(el):
+        return "Engine\\" + el
+    headers_dirs = list(map(add_prefix, headers_dirs))
+    headers_dirs.append("Engine")
+    sources_dirs = list(map(add_prefix, sources_dirs))
+    others_dirs = list(map(add_prefix, others_dirs))
+
     print("Detecting custom module files...")
     paths = env["custom_modules"].split(",")
     modules = OrderedDict()
@@ -1319,6 +1327,7 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
         
         # Generate the filter directories
         filter_dirs = list(set(headers_dirs).union(set(sources_dirs)).union(set(others_dirs)))
+        filter_dirs.sort()
         for d in filter_dirs:
             filters += f'\t\t<Filter Include="{d}">\n\t\t\t<UniqueIdentifier>{{{str(uuid.uuid4())}}}</UniqueIdentifier>\n\t\t</Filter>\n'
         filters_template = filters_template.replace("%%FILTERS%%", filters)
