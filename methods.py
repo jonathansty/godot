@@ -1185,6 +1185,7 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
     filtered_args.pop("platform", None)
     filtered_args.pop("target", None)
     filtered_args.pop("arch", None)
+    filtered_args.pop("dev_build", None)
 
     platform = env["platform"]
     target = env["target"]
