@@ -1104,6 +1104,10 @@ def create_filter_obj(path, project_dir="vs", is_custom_module=False):
     relpath = os.path.relpath(wpath, vspath)
     return (filter, relpath)
 
+
+GAME_PREFIX = "game"
+ENGINE_PREFIX = "engine"
+
 # Custom Visual Studio project generation logic that supports any platform that has a msvs.py
 # script, so Visual Studio can be used to run scons for any platform, with the right defines per target.
 # Invoked with scons vsproj=yes
@@ -1253,7 +1257,8 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
     # Detect the module files and add these to the project
     print("Injecting Engine prefix")
     def add_prefix(el):
-        return "Engine\\" + el
+        return ENGINE_PREFIX + "\\" + el
+
     headers_dirs = list(map(add_prefix, headers_dirs))
     headers_dirs.append("Engine")
     sources_dirs = list(map(add_prefix, sources_dirs))
@@ -1271,8 +1276,9 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
         print(f"Detected module {module_name} and path {rel_module_path}")
 
         # Glob all files and add it to the right directories
+
         def glob_and_append(patterns, dirs, files):
-            custom_prefix = "Game\\modules"
+            custom_prefix = GAME_PREFIX + "\\modules"
 
             for pattern in patterns.split(";"):
                 tmp_dirs = []
