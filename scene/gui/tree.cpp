@@ -3217,6 +3217,10 @@ void Tree::_line_editor_submit(String p_text) {
 	}
 
 	TreeItem::Cell &c = popup_edited_item->cells.write[popup_edited_item_col];
+	if(c.text == p_text) {
+		return;
+	}
+
 	switch (c.mode) {
 		case TreeItem::CELL_MODE_STRING: {
 			c.text = p_text;
