@@ -1507,10 +1507,7 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
             f"platform={platform}",
             f"target={target}",
             f"arch={arch}",
-            f"dev_build=$(DevBuild)",
-            f"incremental_linking=yes",
-            f"debug_symbols=yes",
-            f"separate_debug_symbols=yes"
+            f"dev_build=$(DevBuild)"
         ]
 
         for arg, value in filtered_args.items():
