@@ -2226,7 +2226,7 @@ bool DisplayServerWindows::window_is_focused(WindowID p_window) const {
 	ERR_FAIL_COND_V(!windows.has(p_window), false);
 	const WindowData &wd = windows[p_window];
 
-	return wd.window_has_focus;
+	return wd.window_focused;
 }
 
 DisplayServerWindows::WindowID DisplayServerWindows::get_focused_window() const {
@@ -4830,6 +4830,7 @@ void DisplayServerWindows::_process_activate_event(WindowID p_window_id, WPARAM 
 		if (!IsIconic(windows[p_window_id].hWnd)) {
 			SetFocus(windows[p_window_id].hWnd);
 		}
+		windows[p_window_id].window_focused = true;
 		windows[p_window_id].window_has_focus = true;
 		_send_window_event(windows[p_window_id], WINDOW_EVENT_FOCUS_IN);
 	} else { // WM_INACTIVE.
@@ -4838,6 +4839,7 @@ void DisplayServerWindows::_process_activate_event(WindowID p_window_id, WPARAM 
 		// Release capture unconditionally because it can be set due to dragging, in addition to captured mode.
 		ReleaseCapture();
 		alt_mem = false;
+		windows[p_window_id].window_focused = false;
 		windows[p_window_id].window_has_focus = false;
 		_send_window_event(windows[p_window_id], WINDOW_EVENT_FOCUS_OUT);
 	}
