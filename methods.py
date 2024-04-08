@@ -1493,19 +1493,20 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
         props_template = props_template.replace("%%PROPERTIES%%", "\n    ".join(properties))
         props_template = props_template.replace("%%EXTRA_ITEMS%%", "\n    ".join(extraItems))
 
-        props_template = props_template.replace(
-            "%%DEFINES%%", ";".join([format_key_value(v) for v in list(env["CPPDEFINES"])])
-        )
+        proplist = [format_key_value(v) for v in list(env["CPPDEFINES"])]
+        proplist += [format_key_value(j) for j in env.get("VSHINT_DEFINES", [])]
+        props_template = props_template.replace("%%DEFINES%%", ";".join(proplist))
 
-        includes = ";".join([str(j) for j in env["CPPPATH"]])
-        includes = includes + f";{os.getcwd()}"
-        props_template = props_template.replace("%%INCLUDES%%", includes)
-        props_template = props_template.replace(
-            "%%OPTIONS%%",
-            " ".join(env["CCFLAGS"]) + " " + " ".join([x for x in env["CXXFLAGS"] if not x.startswith("$")]),
-        )
+        proplist = [str(j) for j in env["CPPPATH"]]
+        proplist += [str(j) for j in env.get("VSHINT_INCLUDES", [])]
+        props_template = props_template.replace("%%INCLUDES%%", ";".join(proplist))
 
-        # Returns the suffix needed for the exe
+        proplist = env["CCFLAGS"]
+        proplist += [x for x in env["CXXFLAGS"] if not x.startswith("$")]
+        proplist += [str(j) for j in env.get("VSHINT_OPTIONS", [])]
+        props_template = props_template.replace("%%OPTIONS%%", " ".join(proplist))
+
+         # Returns the suffix needed for the exe
         def get_suffix(dev_build=False):
             suffix = "." + "windows"
             suffix += "." + env["target"]
@@ -1525,8 +1526,8 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
             return suffix
 
         props_template = props_template.replace("%%FOOTER%%",  
-         f"\n\t<PropertyGroup Condition=\"'$(DevBuild)' == 'No'\">\n\t\t<NMakeOutput>{os.path.relpath(f'bin\\godot{get_suffix(False)}', project_dir)}</NMakeOutput>\n\t</PropertyGroup>"
-        +f"\n\t<PropertyGroup Condition=\"'$(DevBuild)' == 'Yes'\">\n\t<NMakeOutput>{os.path.relpath(f'bin\\godot{get_suffix(True)}', project_dir)}</NMakeOutput>\n\t</PropertyGroup>"
+            f"\n\t<PropertyGroup Condition=\"'$(DevBuild)' == 'No'\">\n\t\t<NMakeOutput>{os.path.relpath(f'bin\\godot{get_suffix(False)}', project_dir)}</NMakeOutput>\n\t</PropertyGroup>"
+            +f"\n\t<PropertyGroup Condition=\"'$(DevBuild)' == 'Yes'\">\n\t<NMakeOutput>{os.path.relpath(f'bin\\godot{get_suffix(True)}', project_dir)}</NMakeOutput>\n\t</PropertyGroup>"
         )
 
         # Windows allows us to have spaces in paths, so we need
