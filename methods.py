@@ -1394,7 +1394,7 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
 
         filters_template = filters_template.replace("%%HASH%%", md5)
 
-        with open(f"{project_dir}/{project_name}.vcxproj.filters", "w", encoding="utf-8", newline="\n") as f:
+        with open(f"{project_name}.vcxproj.filters", "w", encoding="utf-8", newline="\r\n") as f:
             f.write(filters_template)
 
     envsources = []
@@ -1573,7 +1573,9 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
         cmd = " ^&amp; ".join(common_build_prefix + [" ".join([commands] + cmd_clean)])
         props_template = props_template.replace("%%CLEAN%%", cmd)
 
-        with open(f"{project_dir}/{project_name}.{platform}.{target}.{arch}.generated.props", "w", encoding="utf-8", newline="\n") as f:
+        with open(
+            f"{project_name}.{platform}.{target}.{arch}.generated.props", "w", encoding="utf-8", newline="\r\n"
+        ) as f:
             f.write(props_template)
 
     proj_uuid = str(uuid.uuid4())
@@ -1694,7 +1696,8 @@ def generate_vs_project(env, original_args, project_name="godot", project_dir="v
         sln_template = sln_template.replace("%%SLNUUID%%", sln_uuid)
         sln_template = sln_template.replace("%%SECTION1%%", "\n    ".join(section1))
         sln_template = sln_template.replace("%%SECTION2%%", "\n    ".join(section2))
-        with open(f"{project_dir}/{project_name}.sln", "w", encoding="utf-8", newline="\n") as f:
+
+        with open(f"{project_name}.sln", "w", encoding="utf-8", newline="\r\n") as f:
             f.write(sln_template)
             
     if get_bool(original_args, "vsproj_gen_only", True):
